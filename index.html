@@ -1,144 +1,257 @@
-<!doctype html>
-<html lang="vi">
-<head>
-  <!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="facebook-domain-verification" content="0jo35npdtiszocyal1prv86q2q2dnm" />
-  <title>Chicken Plus Hậu Nghĩa</title>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chicken Plus Hậu Nghĩa | Gà rán chuẩn Hàn Quốc</title>
-  <meta name="description" content="Chicken Plus Hậu Nghĩa - Gà rán chuẩn Hàn Quốc. Đặt món 0786 340 588. Mở cửa 10:00–21:00." />
-  <meta property="og:title" content="Chicken Plus Hậu Nghĩa">
-  <meta property="og:description" content="Gà rán chuẩn Hàn Quốc - Ngon giòn mỗi ngày!">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://chickenplushaunghia.site/">
-  <link rel="icon" href="https://fav.farm/🍗">
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap" rel="stylesheet">
-</head>
-<body>
-  <!-- Header -->
-  <header class="site-header">
-    <div class="container header-inner">
-      <a class="brand" href="#hero">
-        <img src="assets/logo.png" alt="Chicken Plus Hậu Nghĩa" onerror="this.replaceWith(document.createTextNode('🐔 Chicken Plus'))" />
-      </a>
-      <nav class="nav">
-        <a href="#menu">Menu</a>
-        <a href="#gallery">Hình ảnh</a>
-        <a href="#contact">Liên hệ</a>
-        <a class="btn btn-ghost" href="tel:0786340588">Gọi 0786.340.588</a>
-      </nav>
-    </div>
-  </header>
+const express = require("express");
+const bodyParser = require("body-parser");
+const axios = require("axios");
+const Redis = require("ioredis");
 
-  <!-- Hero -->
-  <section id="hero" class="hero">
-    <div class="container hero-inner">
-      <div class="hero-text">
-        <h1>Gà rán chuẩn Hàn Quốc</h1>
-        <p>Giòn rụm – Đậm sốt – Ngon khó cưỡng. Đặt món ngay hoặc ghé quán!</p>
-        <div class="cta">
-          <a class="btn" href="#menu">Xem menu</a>
-          <a class="btn btn-light" href="https://m.me/107847395712282" target="_blank" rel="noopener">Chat Facebook</a>
-        </div>
-        <ul class="info">
-          <li>📍 1 ĐT825, Xã Hậu Nghĩa, Tây Ninh</li>
-          <li>🕙 10:00 – 21:00</li>
-          <li>☎️ 0786.340.588</li>
-          <li>✉️ <a href="mailto:contact@chickenplushaunghia.site">contact@chickenplushaunghia.site</a></li>
-        </ul>
-      </div>
-      <div class="hero-img" aria-hidden="true">
-        <img src="https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=1600&auto=format&fit=crop" alt="Gà rán nóng giòn">
-      </div>
-    </div>
-  </section>
+const app = express();
+app.use(bodyParser.json());
 
-  <!-- Menu -->
-  <section id="menu" class="section section-alt">
-    <div class="container">
-      <h2 class="section-title">Menu</h2>
-      <p class="section-sub">Hiển thị theo danh mục giống hệ thống Chicken Plus Việt Nam. Sửa nội dung trong <code>script.js → menuData</code> để khớp 100%.</p>
+// ===== ENV =====
+const PAGE_TOKEN = process.env.PAGE_TOKEN;
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const REDIS_URL = process.env.REDIS_URL;
 
-      <div id="menu-root"></div>
-    </div>
-  </section>
+// ===== ADMIN =====
+const ADMIN_IDS = ["61584923081604"];
 
-  <!-- Gallery -->
-  <section id="gallery" class="section">
-    <div class="container">
-      <h2 class="section-title">Hình ảnh</h2>
-      <div class="gallery-grid">
-        <img src="assets/gallery-1.jpg" alt="Không gian quán" onerror="this.remove()">
-        <img src="assets/gallery-2.jpg" alt="Món ăn" onerror="this.remove()">
-        <img src="assets/gallery-3.jpg" alt="Khách hàng" onerror="this.remove()">
-      </div>
-    </div>
-  </section>
+// ===== REDIS =====
+const redis = new Redis(REDIS_URL);
 
-  <!-- Contact / Map -->
-  <section id="contact" class="section section-alt">
-    <div class="container contact-grid">
-      <div>
-        <h2 class="section-title">Liên hệ & Đặt món</h2>
-        <ul class="contact-list">
-          <li>📍 1 ĐT825, Xã Hậu Nghĩa, Tây Ninh</li>
-          <li>🕙 10:00 – 21:00</li>
-          <li>☎️ <a href="tel:0786340588">0786.340.588</a></li>
-          <li>💬 Zalo: <a href="https://zalo.me/0786340588" target="_blank" rel="noopener">zalo.me/0786340588</a></li>
-          <li>✉️ <a href="mailto:contact@chickenplushaunghia.site">contact@chickenplushaunghia.site</a></li>
-          <li>📘 Facebook: <a href="https://m.me/107847395712282" target="_blank" rel="noopener">m.me/107847395712282</a></li>
-        </ul>
-      </div>
-      <div class="map">
-        <iframe
-          loading="lazy" allowfullscreen
-          referrerpolicy="no-referrer-when-downgrade"
-          src="https://www.google.com/maps?q=1%20DT825%20H%E1%BA%ADu%20Ngh%C4%A9a%20T%C3%A2y%20Ninh&output=embed">
-        </iframe>
-      </div>
-    </div>
-  </section>
+// ===== CONST =====
+const HUMAN_TIMEOUT = 15 * 60; // 15 phút
 
-  <footer class="site-footer">
-    <div class="container footer-inner">
-      <p>© <span id="year"></span> Chicken Plus Hậu Nghĩa. Không thuộc sở hữu của Meta.</p>
-      <a href="mailto:contact@chickenplushaunghia.site">Liên hệ: contact@chickenplushaunghia.site</a>
-    </div>
-  </footer>
+// ================= VERIFY =================
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
+  }
+  return res.sendStatus(403);
+});
 
-  <!-- Floating actions -->
-  <div class="fab">
-    <a class="fab-btn call" href="tel:0786340588" aria-label="Gọi 0786 340 588">📞</a>
-    <a class="fab-btn zalo" href="https://zalo.me/0786340588" target="_blank" rel="noopener" aria-label="Chat Zalo">💬</a>
-    <a class="fab-btn fb" href="https://m.me/107847395712282" target="_blank" rel="noopener" aria-label="Chat Messenger">💙</a>
-  </div>
+// ================= WEBHOOK =================
+app.post("/webhook", async (req, res) => {
+  const event = req.body.entry?.[0]?.messaging?.[0];
+  if (!event) return res.sendStatus(200);
 
-  <!-- Messenger Chat Plugin -->
-  <div id="fb-root"></div>
-  <div id="fb-customer-chat" class="fb-customerchat"></div>
-  <script>
-    var chatbox = document.getElementById('fb-customer-chat');
-    chatbox.setAttribute("page_id", "107847395712282");
-    chatbox.setAttribute("attribution", "biz_inbox");
-    window.fbAsyncInit = function() {
-      FB.init({xfbml: true, version: 'v19.0'});
-    };
-    (function(d, s, id){
-      var js, fjs = d.getElementsByTagName(s)[0];
-      if (d.getElementById(id)) return;
-      js = d.createElement(s); js.id = id;
-      js.src = 'https://connect.facebook.net/vi_VN/sdk/xfbml.customerchat.js';
-      fjs.parentNode.insertBefore(js, fjs);
-    }(document, 'script', 'facebook-jssdk'));
-  </script>
+  const senderId = event.sender?.id;
+  if (!senderId) return res.sendStatus(200);
+  if (event.message?.is_echo) return res.sendStatus(200);
 
-  <script src="script.js"></script>
-</body>
-</html>
+  const state = (await redis.get(`chat:${senderId}`)) || "BOT";
+
+  // ===== ADMIN COMMAND =====
+  if (ADMIN_IDS.includes(senderId) && event.message?.text) {
+    const cmd = event.message.text.trim().toLowerCase();
+
+    if (cmd === "/join") {
+      await redis.set(`chat:${senderId}`, "HUMAN", "EX", HUMAN_TIMEOUT);
+      await redis.set(
+        `log:${senderId}`,
+        JSON.stringify({ start: Date.now(), admin: senderId })
+      );
+      sendText(senderId, "👤 Hỗ trợ viên đã tham gia cuộc trò chuyện.");
+      return res.sendStatus(200);
+    }
+
+    if (cmd === "/end") {
+      await endSupport(senderId);
+      return res.sendStatus(200);
+    }
+  }
+
+  // ===== ĐANG NỐI TỔNG ĐÀI =====
+  if (state === "HUMAN") {
+    if (event.postback?.payload === "END_CHAT") {
+      await endSupport(senderId);
+    }
+    return res.sendStatus(200);
+  }
+
+  // ===== POSTBACK =====
+  if (event.postback) {
+    await handlePayload(event.postback.payload, senderId);
+    return res.sendStatus(200);
+  }
+
+  // ===== TEXT =====
+  if (event.message?.text) {
+    sendMainMenu(senderId);
+  }
+
+  res.sendStatus(200);
+});
+
+// ================= PAYLOAD =================
+async function handlePayload(payload, senderId) {
+  switch (payload) {
+    case "GET_STARTED":
+    case "MENU_MAIN":
+      sendMainMenu(senderId);
+      break;
+
+    case "TERMS":
+      sendText(senderId,
+        "📄 Điều khoản Facebook:\nhttps://www.facebook.com/policies"
+      );
+      break;
+
+    case "VIOLATIONS":
+      sendText(senderId,
+        "⚠️ Tiêu chuẩn cộng đồng:\nhttps://transparency.meta.com/vi-vn/policies/community-standards/"
+      );
+      break;
+
+    case "UNLOCK_MENU":
+      sendUnlockMenu(senderId);
+      break;
+
+    case "UNLOCK_DEVICE":
+      sendText(senderId,
+        "🔓 Tài khoản bị khóa do thiết bị lạ.\n" +
+        "Làm theo hướng dẫn chính thức:\n" +
+        "https://m.facebook.com/help/669497174142663?locale=vi_VN&locale2=en_US"
+      );
+      break;
+
+    case "UNLOCK_DISABLED":
+      sendText(senderId,
+        "⛔ Tài khoản bị đình chỉ.\n" +
+        "Chuẩn bị:\n- Email\n- Số điện thoại\n- CCCD chính chủ\n\n" +
+        "Hướng dẫn:\n" +
+        "https://m.facebook.com/help/103873106370583/list?locale=vi_VN&locale2=en_US"
+      );
+      break;
+
+    case "HACKED_MENU":
+      sendHackedConfirm(senderId);
+      break;
+
+    case "HACKED_YES":
+      sendText(senderId,
+        "🔐 Lấy lại tài khoản bị chiếm quyền.\n" +
+        "Chuẩn bị:\n- SĐT\n- Email\n- CCCD\n\n" +
+        "Thực hiện tại:\nhttps://m.facebook.com/hacked"
+      );
+      break;
+
+    case "HACKED_NO":
+      sendText(senderId,
+        "❌ Rất tiếc, chúng tôi không thể hỗ trợ nếu không có thiết bị chính chủ."
+      );
+      break;
+
+    case "CONTACT_SUPPORT":
+      await redis.set(`chat:${senderId}`, "HUMAN", "EX", HUMAN_TIMEOUT);
+      sendText(senderId, "🔔 Chúng tôi đang kết nối bạn với hỗ trợ viên.");
+      setTimeout(() => sendEndButton(senderId), 400);
+      break;
+
+    case "END_CHAT":
+      await endSupport(senderId);
+      break;
+  }
+}
+
+// ================= UI =================
+function sendMainMenu(senderId) {
+  sendButtons(senderId, "Vui lòng chọn nội dung:", [
+    { title: "Điều khoản", payload: "TERMS" },
+    { title: "Vi phạm", payload: "VIOLATIONS" },
+    { title: "🔓 Mở khóa tài khoản", payload: "UNLOCK_MENU" }
+  ]);
+
+  setTimeout(() => {
+    sendButtons(senderId, "Bạn cần thêm hỗ trợ?", [
+      { title: "📞 Liên hệ tổng đài", payload: "CONTACT_SUPPORT" }
+    ]);
+  }, 500);
+}
+
+function sendUnlockMenu(senderId) {
+  sendButtons(senderId, "🔓 Mở khóa tài khoản cá nhân:", [
+    { title: "Thiết bị lạ", payload: "UNLOCK_DEVICE" },
+    { title: "Bị đình chỉ", payload: "UNLOCK_DISABLED" },
+    { title: "Tài khoản bị chiếm quyền", payload: "HACKED_MENU" }
+  ]);
+}
+
+function sendHackedConfirm(senderId) {
+  sendButtons(senderId,
+    "Thiết bị của bạn có phải là thiết bị chính chủ thường xuyên đăng nhập?",
+    [
+      { title: "Có", payload: "HACKED_YES" },
+      { title: "Không", payload: "HACKED_NO" }
+    ]
+  );
+}
+
+function sendEndButton(senderId) {
+  sendButtons(senderId, "Bạn muốn kết thúc hỗ trợ?", [
+    { title: "Kết thúc", payload: "END_CHAT" }
+  ]);
+}
+
+// ================= SUPPORT END + LOG =================
+async function endSupport(senderId) {
+  const logKey = `log:${senderId}`;
+  const log = await redis.get(logKey);
+
+  let duration = 0;
+  if (log) {
+    const data = JSON.parse(log);
+    duration = Math.floor((Date.now() - data.start) / 1000);
+  }
+
+  await redis.set(`chat:${senderId}`, "BOT");
+  await redis.del(logKey);
+
+  sendText(senderId,
+    `🔔 Cuộc trò chuyện hỗ trợ đã kết thúc.\n⏱ Thời gian hỗ trợ: ${duration} giây.`
+  );
+
+  setTimeout(() => sendMainMenu(senderId), 500);
+}
+
+// ================= HELPERS =================
+function sendButtons(senderId, text, buttons) {
+  axios.post(
+    `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`,
+    {
+      recipient: { id: senderId },
+      message: {
+        attachment: {
+          type: "template",
+          payload: {
+            template_type: "button",
+            text,
+            buttons: buttons.map(b => ({
+              type: "postback",
+              title: b.title,
+              payload: b.payload
+            }))
+          }
+        }
+      }
+    }
+  ).catch(() => {});
+}
+
+function sendText(senderId, text) {
+  axios.post(
+    `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`,
+    {
+      recipient: { id: senderId },
+      message: { text }
+    }
+  ).catch(() => {});
+}
+
+// ================= START =================
+app.get("/", (_, res) => res.send("Messenger bot running"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Bot running on port", PORT));
+
 
