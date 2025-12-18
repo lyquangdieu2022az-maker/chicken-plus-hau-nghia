@@ -1,20 +1,29 @@
-const Redis = require("ioredis");
-const redis = new Redis(process.env.REDIS_URL);
-const { sendButtons, sendText } = require("./messenger");
-const { sendMail } = require("./mailer");
+const axios = require("axios");
+const PAGE_TOKEN = process.env.PAGE_TOKEN;
 
-async function startSupport(uid){
-  await redis.set(`state:${uid}`,"HUMAN","EX",900);
-  await redis.set(`log:${uid}`, JSON.stringify({start:Date.now()}));
-  sendText(uid,"👤 Đang kết nối hỗ trợ viên.");
-  sendButtons(uid,"Kết thúc khi hoàn tất",[{title:"Kết thúc", payload:"END_CHAT"}]);
+const activeSupport = {};
+
+function sendText(id, text) {
+  return axios.post(
+    `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`,
+    { recipient: { id }, message: { text } }
+  );
 }
-async function endSupport(uid){
-  const log = JSON.parse((await redis.get(`log:${uid}`))||"{}");
-  const dur = log.start ? Math.floor((Date.now()-log.start)/1000):0;
-  await sendMail(`Ticket ${uid}`, `Duration: ${dur}s`);
-  await redis.del(`log:${uid}`);
-  await redis.set(`state:${uid}`,"BOT");
-  sendText(uid,`Cuộc trò chuyện đã kết thúc. (${dur}s)`);
+
+function startSupport(senderId) {
+  activeSupport[senderId] = Date.now();
+
+  sendText(
+    senderId,
+    "👨‍💼 Hỗ trợ viên đã được kết nối.\n⏳ Thời gian hỗ trợ tối đa: 15 phút"
+  );
+
+  setTimeout(() => {
+    if (activeSupport[senderId]) {
+      delete activeSupport[senderId];
+      sendText(senderId, "⏰ Phiên CSKH đã kết thúc. Cảm ơn bạn!");
+    }
+  }, 15 * 60 * 1000);
 }
-module.exports = { startSupport, endSupport };
+
+module.exports = { startSupport };
