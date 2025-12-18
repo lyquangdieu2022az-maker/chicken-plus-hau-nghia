@@ -6,15 +6,15 @@ const Redis = require("ioredis");
 const app = express();
 app.use(bodyParser.json());
 
-// ================= ENV =================
+// ===== ENV =====
 const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const REDIS_URL = process.env.REDIS_URL;
 
-// ================= REDIS =================
+// ===== REDIS =====
 const redis = new Redis(REDIS_URL);
 
-// ================= VERIFY WEBHOOK =================
+// ===== VERIFY WEBHOOK =====
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -26,7 +26,7 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
-// ================= WEBHOOK =================
+// ===== WEBHOOK =====
 app.post("/webhook", async (req, res) => {
   const event = req.body.entry?.[0]?.messaging?.[0];
   if (!event) return res.sendStatus(200);
@@ -38,7 +38,7 @@ app.post("/webhook", async (req, res) => {
 
   const state = (await redis.get(`chat:${senderId}`)) || "BOT";
 
-  // ===== ĐANG NỐI TỔNG ĐÀI → BOT IM LẶNG =====
+  // ===== ĐANG NỐI HỖ TRỢ =====
   if (state === "HUMAN") {
     if (event.postback?.payload === "END_CHAT") {
       await endSupport(senderId);
@@ -54,16 +54,13 @@ app.post("/webhook", async (req, res) => {
 
   // ===== TEXT =====
   if (event.message?.text) {
-    const text = event.message.text.toLowerCase();
-    if (["hi", "menu", "start", "bắt đầu"].includes(text)) {
-      sendMainMenu(senderId);
-    }
+    sendMainMenu(senderId);
   }
 
   res.sendStatus(200);
 });
 
-// ================= PAYLOAD HANDLER =================
+// ===== HANDLE PAYLOAD =====
 async function handlePayload(payload, senderId) {
   switch (payload) {
     case "GET_STARTED":
@@ -72,60 +69,55 @@ async function handlePayload(payload, senderId) {
       break;
 
     case "TERMS":
-      sendText(
-        senderId,
-        "📄 Điều khoản Facebook:\nhttps://www.facebook.com/policies"
-      );
+      sendText(senderId,
+        "📄 Điều khoản Facebook:\nhttps://www.facebook.com/policies");
       break;
 
     case "VIOLATIONS":
-      sendText(
-        senderId,
-        "⚠️ Tiêu chuẩn cộng đồng:\nhttps://transparency.meta.com/vi-vn/policies/community-standards/"
-      );
+      sendText(senderId,
+        "⚠️ Tiêu chuẩn cộng đồng:\nhttps://transparency.meta.com/vi-vn/policies/community-standards/");
       break;
 
-    // ===== MỞ KHÓA =====
     case "UNLOCK_MENU":
       sendUnlockMenu(senderId);
       break;
 
     case "UNLOCK_DEVICE":
-      sendText(
-        senderId,
-        "🔐 Tài khoản bị khóa do thiết bị lạ:\nhttps://m.facebook.com/help/669497174142663?locale=vi_VN&locale2=en_US"
-      );
+      sendText(senderId,
+        "🔓 Tài khoản bị khóa do thiết bị lạ:\nhttps://m.facebook.com/help/669497174142663?locale=vi_VN");
       break;
 
     case "UNLOCK_DISABLED":
-      sendText(
-        senderId,
-        "⛔ Tài khoản bị đình chỉ:\nVui lòng chuẩn bị Email, SĐT và CCCD chính chủ.\n\n👉 Hướng dẫn:\nhttps://m.facebook.com/help/103873106370583/list?locale=vi_VN&locale2=en_US"
-      );
+      sendText(senderId,
+        "🚫 Tài khoản bị đình chỉ:\nhttps://m.facebook.com/help/103873106370583/list?locale=vi_VN");
       break;
 
-    // ===== LẤY LẠI TÀI KHOẢN =====
     case "HACKED_MENU":
-      sendHackedConfirm(senderId);
+      sendButtons(
+        senderId,
+        "🔐 Tài khoản bị chiếm quyền.\nThiết bị này có phải thiết bị chính chủ thường xuyên đăng nhập không?",
+        [
+          { title: "Có", payload: "HACKED_YES" },
+          { title: "Không", payload: "HACKED_NO" }
+        ]
+      );
       break;
 
     case "HACKED_YES":
-      sendText(
-        senderId,
-        "🔁 Lấy lại tài khoản bị chiếm quyền:\nhttps://m.facebook.com/hacked"
-      );
+      sendText(senderId,
+        "✅ Vui lòng chuẩn bị:\n• SĐT\n• Email liên kết Facebook\n• CCCD chính chủ\n\n👉 Thực hiện tại:\nhttps://m.facebook.com/hacked");
       break;
 
     case "HACKED_NO":
-      sendText(
-        senderId,
-        "❌ Rất tiếc, chúng tôi không thể xử lý khi thiết bị không phải chính chủ."
-      );
+      sendText(senderId,
+        "❌ Rất tiếc, chúng tôi không thể hỗ trợ nếu không phải thiết bị chính chủ.");
       break;
 
-    // ===== TỔNG ĐÀI =====
     case "CONTACT_SUPPORT":
-      await startSupport(senderId);
+      await redis.set(`chat:${senderId}`, "HUMAN");
+      await redis.set(`log:${senderId}`, JSON.stringify({ start: Date.now() }));
+      sendText(senderId, "📞 Đang kết nối bạn với hỗ trợ viên…");
+      sendEndButton(senderId);
       break;
 
     case "END_CHAT":
@@ -134,52 +126,36 @@ async function handlePayload(payload, senderId) {
   }
 }
 
-// ================= UI =================
+// ===== UI =====
 function sendMainMenu(senderId) {
   sendButtons(senderId, "Vui lòng chọn nội dung:", [
     { title: "📄 Điều khoản", payload: "TERMS" },
     { title: "⚠️ Vi phạm", payload: "VIOLATIONS" },
-    { title: "🔓 Mở khóa tài khoản", payload: "UNLOCK_MENU" },
+    { title: "🔓 Mở khóa tài khoản", payload: "UNLOCK_MENU" }
   ]);
 
   setTimeout(() => {
     sendButtons(senderId, "Bạn cần thêm hỗ trợ?", [
-      { title: "📞 Liên hệ tổng đài", payload: "CONTACT_SUPPORT" },
+      { title: "📞 Liên hệ tổng đài", payload: "CONTACT_SUPPORT" }
     ]);
   }, 400);
 }
 
 function sendUnlockMenu(senderId) {
   sendButtons(senderId, "🔓 Mở khóa tài khoản cá nhân:", [
-    { title: "Thiết bị lạ đăng nhập", payload: "UNLOCK_DEVICE" },
-    { title: "Tài khoản bị đình chỉ", payload: "UNLOCK_DISABLED" },
-    { title: "Tài khoản bị chiếm quyền", payload: "HACKED_MENU" },
+    { title: "Thiết bị lạ", payload: "UNLOCK_DEVICE" },
+    { title: "Bị đình chỉ", payload: "UNLOCK_DISABLED" },
+    { title: "Bị chiếm quyền", payload: "HACKED_MENU" }
   ]);
 }
 
-function sendHackedConfirm(senderId) {
-  sendButtons(
-    senderId,
-    "Thiết bị của bạn có phải thiết bị chính chủ thường xuyên đăng nhập không?",
-    [
-      { title: "Có", payload: "HACKED_YES" },
-      { title: "Không", payload: "HACKED_NO" },
-    ]
-  );
+function sendEndButton(senderId) {
+  sendButtons(senderId, "Bạn muốn kết thúc hỗ trợ?", [
+    { title: "Kết thúc", payload: "END_CHAT" }
+  ]);
 }
 
-// ================= SUPPORT =================
-async function startSupport(senderId) {
-  await redis.set(`chat:${senderId}`, "HUMAN");
-  await redis.set(
-    `log:${senderId}`,
-    JSON.stringify({ start: Date.now() })
-  );
-
-  sendText(senderId, "👤 Chúng tôi đang kết nối bạn với hỗ trợ viên.");
-  setTimeout(() => sendEndButton(senderId), 400);
-}
-
+// ===== SUPPORT END =====
 async function endSupport(senderId) {
   const logKey = `log:${senderId}`;
   const log = await redis.get(logKey);
@@ -187,18 +163,15 @@ async function endSupport(senderId) {
   if (log) {
     const data = JSON.parse(log);
     const duration = Math.floor((Date.now() - data.start) / 1000);
-    sendText(
-      senderId,
-      `✅ Cuộc trò chuyện đã kết thúc.\n⏱ Thời gian hỗ trợ: ${duration} giây`
-    );
     await redis.del(logKey);
+    sendText(senderId, `⏱️ Thời gian hỗ trợ: ${duration} giây`);
   }
 
   await redis.set(`chat:${senderId}`, "BOT");
-  setTimeout(() => sendMainMenu(senderId), 500);
+  sendMainMenu(senderId);
 }
 
-// ================= BUTTON HELPERS =================
+// ===== HELPERS =====
 function sendButtons(senderId, text, buttons) {
   axios.post(
     `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`,
@@ -210,22 +183,16 @@ function sendButtons(senderId, text, buttons) {
           payload: {
             template_type: "button",
             text,
-            buttons: buttons.map((b) => ({
+            buttons: buttons.map(b => ({
               type: "postback",
               title: b.title,
-              payload: b.payload,
-            })),
-          },
-        },
-      },
+              payload: b.payload
+            }))
+          }
+        }
+      }
     }
   ).catch(() => {});
-}
-
-function sendEndButton(senderId) {
-  sendButtons(senderId, "Bạn muốn kết thúc cuộc trò chuyện?", [
-    { title: "Kết thúc", payload: "END_CHAT" },
-  ]);
 }
 
 function sendText(senderId, text) {
@@ -233,18 +200,14 @@ function sendText(senderId, text) {
     `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`,
     {
       recipient: { id: senderId },
-      message: { text },
+      message: { text }
     }
   ).catch(() => {});
 }
 
-// ================= ROOT =================
-app.get("/", (req, res) => {
-  res.send("Messenger bot running");
-});
+// ===== ROOT =====
+app.get("/", (_, res) => res.send("Messenger bot running"));
 
-// ================= START =================
+// ===== START =====
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Bot running on port " + PORT);
-});
+app.listen(PORT, () => console.log("Bot running on port", PORT));
