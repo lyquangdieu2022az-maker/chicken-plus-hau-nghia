@@ -1,179 +1,79 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const axios = require("axios");
+const Redis = require("ioredis");
+const { sendButtons, sendText } = require("./services/messenger");
+const { t, setLang, getLang } = require("./services/i18n");
+const { startSupport, endSupport } = require("./services/support");
 
 const app = express();
 app.use(bodyParser.json());
 
-const PAGE_TOKEN = process.env.PAGE_TOKEN;
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const redis = new Redis(process.env.REDIS_URL);
 
-const GRAPH_URL = `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`;
-
-// ================= VERIFY =================
+// Verify
 app.get("/webhook", (req, res) => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
-
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
-  }
-  return res.sendStatus(403);
+  const { "hub.mode": m, "hub.verify_token": v, "hub.challenge": c } = req.query;
+  return (m==="subscribe" && v===process.env.VERIFY_TOKEN) ? res.send(c) : res.sendStatus(403);
 });
 
-// ================= WEBHOOK =================
-const userState = {}; // BOT | HUMAN
-const userLang = {};  // vi | en
-
 app.post("/webhook", async (req, res) => {
-  const event = req.body.entry?.[0]?.messaging?.[0];
-  if (!event) return res.sendStatus(200);
+  const ev = req.body.entry?.[0]?.messaging?.[0];
+  if (!ev || ev.message?.is_echo) return res.sendStatus(200);
+  const uid = ev.sender.id;
+  const state = (await redis.get(`state:${uid}`)) || "BOT";
 
-  const sender = event.sender.id;
-
-  if (event.message?.is_echo) return res.sendStatus(200);
-
-  // nếu đang hỗ trợ người thật → bot im lặng
-  if (userState[sender] === "HUMAN") {
-    if (event.postback?.payload === "END_SUPPORT") {
-      userState[sender] = "BOT";
-      sendMainMenu(sender);
-    }
+  if (state === "HUMAN") {
+    if (ev.postback?.payload === "END_CHAT") await endSupport(uid);
     return res.sendStatus(200);
   }
 
-  if (event.postback) {
-    handlePayload(sender, event.postback.payload);
+  if (ev.postback) {
+    const p = ev.postback.payload;
+    if (p === "GET_STARTED") {
+      return sendButtons(uid, "Choose language / Chọn ngôn ngữ", [
+        {title:"Tiếng Việt", payload:"LANG_VI"},
+        {title:"English", payload:"LANG_EN"}
+      ]);
+    }
+    if (p === "LANG_VI") { await setLang(uid,"vi"); return mainMenu(uid); }
+    if (p === "LANG_EN") { await setLang(uid,"en"); return mainMenu(uid); }
+
+    if (p === "MENU_MAIN") return mainMenu(uid);
+    if (p === "UNLOCK_MENU") return unlockMenu(uid);
+    if (p === "UNLOCK_DEVICE") return sendText(uid, t(uid,"unlock_device"));
+    if (p === "UNLOCK_DISABLED") return sendText(uid, t(uid,"unlock_disabled"));
+    if (p === "HACKED_MENU") return hackedConfirm(uid);
+    if (p === "HACKED_YES") return sendText(uid, t(uid,"hacked_yes"));
+    if (p === "HACKED_NO") return sendText(uid, t(uid,"hacked_no"));
+    if (p === "TERMS") return sendText(uid, t(uid,"terms"));
+    if (p === "VIOLATIONS") return sendText(uid, t(uid,"violations"));
+    if (p === "CONTACT_SUPPORT") return startSupport(uid);
   }
 
   res.sendStatus(200);
 });
 
-// ================= HANDLE PAYLOAD =================
-function handlePayload(sender, payload) {
-  switch (payload) {
-    case "GET_STARTED":
-      chooseLanguage(sender);
-      break;
-
-    case "LANG_VI":
-      userLang[sender] = "vi";
-      sendMainMenu(sender);
-      break;
-
-    case "LANG_EN":
-      userLang[sender] = "en";
-      sendMainMenu(sender);
-      break;
-
-    case "TERMS":
-      sendText(sender,
-        userLang[sender] === "en"
-          ? "Facebook Terms:\nhttps://www.facebook.com/policies"
-          : "Điều khoản Facebook:\nhttps://www.facebook.com/policies"
-      );
-      break;
-
-    case "STANDARDS":
-      sendText(sender,
-        userLang[sender] === "en"
-          ? "Community Standards:\nhttps://transparency.meta.com/policies/community-standards/"
-          : "Tiêu chuẩn cộng đồng:\nhttps://transparency.meta.com/vi-vn/policies/community-standards/"
-      );
-      break;
-
-    case "UNLOCK":
-      sendUnlockMenu(sender);
-      break;
-
-    case "UNLOCK_DEVICE":
-      sendText(sender,
-        "https://m.facebook.com/help/669497174142663?locale=vi_VN&locale2=en_US"
-      );
-      break;
-
-    case "UNLOCK_DISABLED":
-      sendText(sender,
-        "https://m.facebook.com/help/103873106370583/list?locale=vi_VN&locale2=en_US"
-      );
-      break;
-
-    case "HACKED":
-      sendText(sender, "https://m.facebook.com/hacked");
-      break;
-
-    case "SUPPORT":
-      userState[sender] = "HUMAN";
-      sendSupportEndButton(sender);
-      break;
-  }
+function mainMenu(uid){
+  return sendButtons(uid, t(uid,"menu_title"), [
+    {title:t(uid,"menu_unlock"), payload:"UNLOCK_MENU"},
+    {title:t(uid,"menu_terms"), payload:"TERMS"},
+    {title:t(uid,"menu_violations"), payload:"VIOLATIONS"},
+    {title:t(uid,"menu_support"), payload:"CONTACT_SUPPORT"}
+  ]);
 }
-
-// ================= UI =================
-function chooseLanguage(sender) {
-  sendButtons(sender, "Choose language / Chọn ngôn ngữ", [
-    { title: "Tiếng Việt", payload: "LANG_VI" },
-    { title: "English", payload: "LANG_EN" }
+function unlockMenu(uid){
+  return sendButtons(uid, t(uid,"unlock_title"), [
+    {title:t(uid,"unlock_device_btn"), payload:"UNLOCK_DEVICE"},
+    {title:t(uid,"unlock_disabled_btn"), payload:"UNLOCK_DISABLED"},
+    {title:t(uid,"unlock_hacked_btn"), payload:"HACKED_MENU"}
+  ]);
+}
+function hackedConfirm(uid){
+  return sendButtons(uid, t(uid,"hacked_q"), [
+    {title:t(uid,"yes"), payload:"HACKED_YES"},
+    {title:t(uid,"no"), payload:"HACKED_NO"}
   ]);
 }
 
-function sendMainMenu(sender) {
-  userState[sender] = "BOT";
-  sendButtons(sender, "Vui lòng chọn nội dung", [
-    { title: "Điều khoản", payload: "TERMS" },
-    { title: "Tiêu chuẩn cộng đồng", payload: "STANDARDS" },
-    { title: "Mở khóa tài khoản", payload: "UNLOCK" },
-    { title: "Lấy lại tài khoản", payload: "HACKED" },
-    { title: "Liên hệ hỗ trợ", payload: "SUPPORT" }
-  ]);
-}
-
-function sendUnlockMenu(sender) {
-  sendButtons(sender, "Chọn loại mở khóa", [
-    { title: "Thiết bị lạ đăng nhập", payload: "UNLOCK_DEVICE" },
-    { title: "Tài khoản bị đình chỉ", payload: "UNLOCK_DISABLED" }
-  ]);
-}
-
-function sendSupportEndButton(sender) {
-  sendButtons(sender, "Bạn đang kết nối hỗ trợ", [
-    { title: "Kết thúc", payload: "END_SUPPORT" }
-  ]);
-}
-
-// ================= SEND =================
-function sendText(sender, text) {
-  axios.post(GRAPH_URL, {
-    recipient: { id: sender },
-    message: { text }
-  }).catch(() => {});
-}
-
-function sendButtons(sender, text, buttons) {
-  axios.post(GRAPH_URL, {
-    recipient: { id: sender },
-    message: {
-      attachment: {
-        type: "template",
-        payload: {
-          template_type: "button",
-          text,
-          buttons: buttons.map(b => ({
-            type: "postback",
-            title: b.title,
-            payload: b.payload
-          }))
-        }
-      }
-    }
-  }).catch(() => {});
-}
-
-// ================= ROOT =================
-app.get("/", (req, res) => {
-  res.send("Messenger bot running");
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Bot running on port", PORT));
+app.get("/", (_,res)=>res.send("Messenger bot running"));
+app.listen(process.env.PORT||3000);
