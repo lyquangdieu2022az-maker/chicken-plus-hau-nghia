@@ -1,35 +1,22 @@
 const axios = require("axios");
+const { t } = require("./i18n");
+const { startSupport } = require("./support");
 
 const PAGE_TOKEN = process.env.PAGE_TOKEN;
+const userLang = {};
 
-// ===== SEND TEXT =====
-async function sendText(psid, text) {
+function sendButtons(id, text, buttons) {
   return axios.post(
     `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`,
     {
-      recipient: { id: psid },
-      message: { text }
-    }
-  );
-}
-
-// ===== SEND BUTTON =====
-async function sendButtons(psid, text, buttons) {
-  return axios.post(
-    `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`,
-    {
-      recipient: { id: psid },
+      recipient: { id },
       message: {
         attachment: {
           type: "template",
           payload: {
             template_type: "button",
             text,
-            buttons: buttons.map(b => ({
-              type: "postback",
-              title: b.title,
-              payload: b.payload
-            }))
+            buttons
           }
         }
       }
@@ -37,26 +24,68 @@ async function sendButtons(psid, text, buttons) {
   );
 }
 
-// ===== MAIN MENU =====
-async function sendMainMenu(psid) {
-  await sendButtons(psid, "Chào mừng bạn đến Trung tâm hỗ trợ Meta VN 🇻🇳", [
-    { title: "🔓 Mở khóa tài khoản", payload: "UNLOCK_MENU" },
-    { title: "🛡️ Tài khoản bị chiếm quyền", payload: "HACKED_MENU" },
-    { title: "📞 Liên hệ CSKH", payload: "CONTACT_SUPPORT" }
+async function handleMessage(senderId, message) {
+  if (!userLang[senderId]) {
+    return sendButtons(senderId, "🌐 Chọn ngôn ngữ / Choose language", [
+      { type: "postback", title: "🇻🇳 Tiếng Việt", payload: "LANG_VI" },
+      { type: "postback", title: "🇺🇸 English", payload: "LANG_EN" }
+    ]);
+  }
+
+  sendMainMenu(senderId);
+}
+
+function sendMainMenu(senderId) {
+  const lang = userLang[senderId];
+  sendButtons(senderId, t(lang, "mainMenu"), [
+    { type: "postback", title: "🔓 Mở khóa", payload: "UNLOCK" },
+    { type: "postback", title: "🛑 Bị chiếm quyền", payload: "HACKED" },
+    { type: "postback", title: "📞 CSKH VIP", payload: "SUPPORT" }
   ]);
 }
 
-// ===== UNLOCK MENU =====
-async function sendUnlockMenu(psid) {
-  await sendButtons(psid, "Vui lòng chọn loại khóa:", [
-    { title: "Thiết bị lạ đăng nhập", payload: "UNLOCK_DEVICE" },
-    { title: "Tài khoản bị đình chỉ", payload: "UNLOCK_DISABLED" }
-  ]);
+async function handlePostback(senderId, payload) {
+  if (payload === "LANG_VI") {
+    userLang[senderId] = "vi";
+    return sendMainMenu(senderId);
+  }
+  if (payload === "LANG_EN") {
+    userLang[senderId] = "en";
+    return sendMainMenu(senderId);
+  }
+
+  const lang = userLang[senderId] || "vi";
+
+  switch (payload) {
+    case "UNLOCK":
+      sendButtons(senderId, t(lang, "unlock"), [
+        {
+          type: "web_url",
+          title: "Thiết bị lạ",
+          url: "https://m.facebook.com/help/669497174142663"
+        },
+        {
+          type: "web_url",
+          title: "Bị đình chỉ",
+          url: "https://m.facebook.com/help/103873106370583"
+        }
+      ]);
+      break;
+
+    case "HACKED":
+      sendButtons(senderId, t(lang, "hacked"), [
+        {
+          type: "web_url",
+          title: "Lấy lại tài khoản",
+          url: "https://m.facebook.com/hacked"
+        }
+      ]);
+      break;
+
+    case "SUPPORT":
+      startSupport(senderId);
+      break;
+  }
 }
 
-module.exports = {
-  sendText,
-  sendButtons,
-  sendMainMenu,
-  sendUnlockMenu
-};
+module.exports = { handleMessage, handlePostback };
