@@ -1,257 +1,42 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const axios = require("axios");
-const Redis = require("ioredis");
-
-const app = express();
-app.use(bodyParser.json());
-
-// ===== ENV =====
-const PAGE_TOKEN = process.env.PAGE_TOKEN;
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-const REDIS_URL = process.env.REDIS_URL;
-
-// ===== ADMIN =====
-const ADMIN_IDS = ["61584923081604"];
-
-// ===== REDIS =====
-const redis = new Redis(REDIS_URL);
-
-// ===== CONST =====
-const HUMAN_TIMEOUT = 15 * 60; // 15 phút
-
-// ================= VERIFY =================
-app.get("/webhook", (req, res) => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
-  }
-  return res.sendStatus(403);
-});
-
-// ================= WEBHOOK =================
-app.post("/webhook", async (req, res) => {
-  const event = req.body.entry?.[0]?.messaging?.[0];
-  if (!event) return res.sendStatus(200);
-
-  const senderId = event.sender?.id;
-  if (!senderId) return res.sendStatus(200);
-  if (event.message?.is_echo) return res.sendStatus(200);
-
-  const state = (await redis.get(`chat:${senderId}`)) || "BOT";
-
-  // ===== ADMIN COMMAND =====
-  if (ADMIN_IDS.includes(senderId) && event.message?.text) {
-    const cmd = event.message.text.trim().toLowerCase();
-
-    if (cmd === "/join") {
-      await redis.set(`chat:${senderId}`, "HUMAN", "EX", HUMAN_TIMEOUT);
-      await redis.set(
-        `log:${senderId}`,
-        JSON.stringify({ start: Date.now(), admin: senderId })
-      );
-      sendText(senderId, "👤 Hỗ trợ viên đã tham gia cuộc trò chuyện.");
-      return res.sendStatus(200);
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>FB Community VN</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      text-align: center;
+      padding-top: 100px;
     }
-
-    if (cmd === "/end") {
-      await endSupport(senderId);
-      return res.sendStatus(200);
+    .box {
+      background: #fff;
+      padding: 40px;
+      margin: auto;
+      width: 90%;
+      max-width: 420px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.1);
     }
-  }
-
-  // ===== ĐANG NỐI TỔNG ĐÀI =====
-  if (state === "HUMAN") {
-    if (event.postback?.payload === "END_CHAT") {
-      await endSupport(senderId);
+    a {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 20px;
+      background: #1877f2;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 6px;
     }
-    return res.sendStatus(200);
-  }
-
-  // ===== POSTBACK =====
-  if (event.postback) {
-    await handlePayload(event.postback.payload, senderId);
-    return res.sendStatus(200);
-  }
-
-  // ===== TEXT =====
-  if (event.message?.text) {
-    sendMainMenu(senderId);
-  }
-
-  res.sendStatus(200);
-});
-
-// ================= PAYLOAD =================
-async function handlePayload(payload, senderId) {
-  switch (payload) {
-    case "GET_STARTED":
-    case "MENU_MAIN":
-      sendMainMenu(senderId);
-      break;
-
-    case "TERMS":
-      sendText(senderId,
-        "📄 Điều khoản Facebook:\nhttps://www.facebook.com/policies"
-      );
-      break;
-
-    case "VIOLATIONS":
-      sendText(senderId,
-        "⚠️ Tiêu chuẩn cộng đồng:\nhttps://transparency.meta.com/vi-vn/policies/community-standards/"
-      );
-      break;
-
-    case "UNLOCK_MENU":
-      sendUnlockMenu(senderId);
-      break;
-
-    case "UNLOCK_DEVICE":
-      sendText(senderId,
-        "🔓 Tài khoản bị khóa do thiết bị lạ.\n" +
-        "Làm theo hướng dẫn chính thức:\n" +
-        "https://m.facebook.com/help/669497174142663?locale=vi_VN&locale2=en_US"
-      );
-      break;
-
-    case "UNLOCK_DISABLED":
-      sendText(senderId,
-        "⛔ Tài khoản bị đình chỉ.\n" +
-        "Chuẩn bị:\n- Email\n- Số điện thoại\n- CCCD chính chủ\n\n" +
-        "Hướng dẫn:\n" +
-        "https://m.facebook.com/help/103873106370583/list?locale=vi_VN&locale2=en_US"
-      );
-      break;
-
-    case "HACKED_MENU":
-      sendHackedConfirm(senderId);
-      break;
-
-    case "HACKED_YES":
-      sendText(senderId,
-        "🔐 Lấy lại tài khoản bị chiếm quyền.\n" +
-        "Chuẩn bị:\n- SĐT\n- Email\n- CCCD\n\n" +
-        "Thực hiện tại:\nhttps://m.facebook.com/hacked"
-      );
-      break;
-
-    case "HACKED_NO":
-      sendText(senderId,
-        "❌ Rất tiếc, chúng tôi không thể hỗ trợ nếu không có thiết bị chính chủ."
-      );
-      break;
-
-    case "CONTACT_SUPPORT":
-      await redis.set(`chat:${senderId}`, "HUMAN", "EX", HUMAN_TIMEOUT);
-      sendText(senderId, "🔔 Chúng tôi đang kết nối bạn với hỗ trợ viên.");
-      setTimeout(() => sendEndButton(senderId), 400);
-      break;
-
-    case "END_CHAT":
-      await endSupport(senderId);
-      break;
-  }
-}
-
-// ================= UI =================
-function sendMainMenu(senderId) {
-  sendButtons(senderId, "Vui lòng chọn nội dung:", [
-    { title: "Điều khoản", payload: "TERMS" },
-    { title: "Vi phạm", payload: "VIOLATIONS" },
-    { title: "🔓 Mở khóa tài khoản", payload: "UNLOCK_MENU" }
-  ]);
-
-  setTimeout(() => {
-    sendButtons(senderId, "Bạn cần thêm hỗ trợ?", [
-      { title: "📞 Liên hệ tổng đài", payload: "CONTACT_SUPPORT" }
-    ]);
-  }, 500);
-}
-
-function sendUnlockMenu(senderId) {
-  sendButtons(senderId, "🔓 Mở khóa tài khoản cá nhân:", [
-    { title: "Thiết bị lạ", payload: "UNLOCK_DEVICE" },
-    { title: "Bị đình chỉ", payload: "UNLOCK_DISABLED" },
-    { title: "Tài khoản bị chiếm quyền", payload: "HACKED_MENU" }
-  ]);
-}
-
-function sendHackedConfirm(senderId) {
-  sendButtons(senderId,
-    "Thiết bị của bạn có phải là thiết bị chính chủ thường xuyên đăng nhập?",
-    [
-      { title: "Có", payload: "HACKED_YES" },
-      { title: "Không", payload: "HACKED_NO" }
-    ]
-  );
-}
-
-function sendEndButton(senderId) {
-  sendButtons(senderId, "Bạn muốn kết thúc hỗ trợ?", [
-    { title: "Kết thúc", payload: "END_CHAT" }
-  ]);
-}
-
-// ================= SUPPORT END + LOG =================
-async function endSupport(senderId) {
-  const logKey = `log:${senderId}`;
-  const log = await redis.get(logKey);
-
-  let duration = 0;
-  if (log) {
-    const data = JSON.parse(log);
-    duration = Math.floor((Date.now() - data.start) / 1000);
-  }
-
-  await redis.set(`chat:${senderId}`, "BOT");
-  await redis.del(logKey);
-
-  sendText(senderId,
-    `🔔 Cuộc trò chuyện hỗ trợ đã kết thúc.\n⏱ Thời gian hỗ trợ: ${duration} giây.`
-  );
-
-  setTimeout(() => sendMainMenu(senderId), 500);
-}
-
-// ================= HELPERS =================
-function sendButtons(senderId, text, buttons) {
-  axios.post(
-    `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`,
-    {
-      recipient: { id: senderId },
-      message: {
-        attachment: {
-          type: "template",
-          payload: {
-            template_type: "button",
-            text,
-            buttons: buttons.map(b => ({
-              type: "postback",
-              title: b.title,
-              payload: b.payload
-            }))
-          }
-        }
-      }
-    }
-  ).catch(() => {});
-}
-
-function sendText(senderId, text) {
-  axios.post(
-    `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`,
-    {
-      recipient: { id: senderId },
-      message: { text }
-    }
-  ).catch(() => {});
-}
-
-// ================= START =================
-app.get("/", (_, res) => res.send("Messenger bot running"));
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Bot running on port", PORT));
-
-
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>FB Community VN</h2>
+    <p>Kênh hỗ trợ chính thức</p>
+    <a href="https://m.me/YOUR_PAGE_ID" target="_blank">
+      Nhắn tin Messenger
+    </a>
+  </div>
+</body>
+</html>
