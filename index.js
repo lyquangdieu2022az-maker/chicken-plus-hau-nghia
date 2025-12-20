@@ -5,9 +5,10 @@ const { handleMessage, handlePostback } = require("./messenger");
 const app = express();
 app.use(bodyParser.json());
 
+const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
-// Verify webhook
+// VERIFY WEBHOOK
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -19,8 +20,8 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
-// Receive messages
-app.post("/webhook", async (req, res) => {
+// RECEIVE MESSAGE
+app.post("/webhook", (req, res) => {
   const entry = req.body.entry?.[0];
   const event = entry?.messaging?.[0];
   if (!event) return res.sendStatus(200);
@@ -28,11 +29,11 @@ app.post("/webhook", async (req, res) => {
   const psid = event.sender.id;
 
   if (event.message) {
-    await handleMessage(psid, event.message);
+    handleMessage(psid, event.message);
   }
 
   if (event.postback) {
-    await handlePostback(psid, event.postback.payload);
+    handlePostback(psid, event.postback.payload);
   }
 
   res.sendStatus(200);
