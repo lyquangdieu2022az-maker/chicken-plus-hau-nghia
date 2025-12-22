@@ -1,11 +1,11 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const { handleMessage, handlePostback } = require("./messenger");
+const { renderDashboard } = require("./dashboard");
 
 const app = express();
 app.use(bodyParser.json());
 
-const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
 // VERIFY WEBHOOK
@@ -17,27 +17,27 @@ app.get("/webhook", (req, res) => {
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     return res.status(200).send(challenge);
   }
-  return res.sendStatus(403);
+  res.sendStatus(403);
 });
 
 // RECEIVE MESSAGE
 app.post("/webhook", (req, res) => {
   const entry = req.body.entry?.[0];
   const event = entry?.messaging?.[0];
-  if (!event) return res.sendStatus(200);
 
-  const psid = event.sender.id;
-
-  if (event.message) {
-    handleMessage(psid, event.message);
+  if (event?.message) {
+    handleMessage(event.sender.id, event.message);
   }
 
-  if (event.postback) {
-    handlePostback(psid, event.postback.payload);
+  if (event?.postback) {
+    handlePostback(event.sender.id, event.postback.payload);
   }
 
   res.sendStatus(200);
 });
+
+// DASHBOARD SUPPORT
+app.get("/dashboard", renderDashboard);
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
