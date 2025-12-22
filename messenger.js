@@ -1,26 +1,19 @@
 const axios = require("axios");
-const PAGE_TOKEN = process.env.PAGE_TOKEN;
+const { createTicket } = require("./ticket");
 
+const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const userLang = {};
 
-async function callSendAPI(payload) {
+async function send(payload) {
   await axios.post(
     `https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_TOKEN}`,
     payload
   );
 }
 
-// ===== TEXT =====
-function sendText(psid, text) {
-  return callSendAPI({
-    recipient: { id: psid },
-    message: { text }
-  });
-}
-
-// ===== LANGUAGE =====
+// LANGUAGE
 function sendLanguage(psid) {
-  return callSendAPI({
+  return send({
     recipient: { id: psid },
     message: {
       attachment: {
@@ -38,11 +31,10 @@ function sendLanguage(psid) {
   });
 }
 
-// ===== MAIN MENU =====
+// MENU
 function sendMenu(psid) {
-  const vi = userLang[psid] !== "en";
-
-  return callSendAPI({
+  const vi = userLang[psid] === "vi";
+  return send({
     recipient: { id: psid },
     message: {
       attachment: {
@@ -53,9 +45,9 @@ function sendMenu(psid) {
             ? "Vui lòng chọn nội dung hỗ trợ"
             : "Please choose support content",
           buttons: [
-            { type: "postback", title: "Tiêu chuẩn cộng đồng", payload: "POLICY" },
-            { type: "postback", title: "Mở khoá tài khoản", payload: "UNLOCK" },
-            { type: "postback", title: "Tài khoản bị chiếm quyền", payload: "HACKED" }
+            { type: "postback", title: vi ? "Tiêu chuẩn cộng đồng" : "Community Standards", payload: "STANDARD" },
+            { type: "postback", title: vi ? "Mở khóa tài khoản" : "Unlock account", payload: "UNLOCK" },
+            { type: "postback", title: vi ? "Tài khoản bị chiếm quyền" : "Hacked account", payload: "HACKED" }
           ]
         }
       }
@@ -63,53 +55,37 @@ function sendMenu(psid) {
   });
 }
 
-// ===== CONTENT =====
-function sendPolicy(psid) {
-  return sendText(
-    psid,
-    "Xem Tiêu chuẩn cộng đồng Facebook:\nhttps://www.facebook.com/communitystandards/"
-  );
+function sendText(psid, text) {
+  return send({ recipient: { id: psid }, message: { text } });
 }
 
-function sendUnlock(psid) {
-  return sendText(
-    psid,
-    "Gửi yêu cầu mở khoá tài khoản:\nhttps://www.facebook.com/help/contact/260749603972907"
-  );
+async function handleMessage(psid) {
+  if (!userLang[psid]) return sendLanguage(psid);
+  return sendMenu(psid);
 }
 
-function sendHacked(psid) {
-  return sendText(
-    psid,
-    "Báo cáo tài khoản bị chiếm quyền:\nhttps://www.facebook.com/hacked"
-  );
-}
+async function handlePostback(psid, payload) {
+  if (payload === "GET_STARTED") return sendLanguage(psid);
 
-// ===== HANDLER =====
-function handleMessage(psid, message) {
-  return sendLanguage(psid);
-}
+  if (payload === "LANG_VI") {
+    userLang[psid] = "vi";
+    return sendMenu(psid);
+  }
 
-function handlePostback(psid, payload) {
-  switch (payload) {
-    case "GET_STARTED":
-      return sendLanguage(psid);
-    case "LANG_VI":
-      userLang[psid] = "vi";
-      return sendMenu(psid);
-    case "LANG_EN":
-      userLang[psid] = "en";
-      return sendMenu(psid);
-    case "POLICY":
-      return sendPolicy(psid);
-    case "UNLOCK":
-      return sendUnlock(psid);
-    case "HACKED":
-      return sendHacked(psid);
+  if (payload === "LANG_EN") {
+    userLang[psid] = "en";
+    return sendMenu(psid);
+  }
+
+  if (["STANDARD", "UNLOCK", "HACKED"].includes(payload)) {
+    await createTicket(psid, payload);
+    return sendText(
+      psid,
+      userLang[psid] === "vi"
+        ? "Yêu cầu đã được ghi nhận. Bộ phận hỗ trợ sẽ liên hệ qua email."
+        : "Your request has been recorded. Support will contact you via email."
+    );
   }
 }
 
-module.exports = {
-  handleMessage,
-  handlePostback
-};
+module.exports = { handleMessage, handlePostback };
